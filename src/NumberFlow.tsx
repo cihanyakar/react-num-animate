@@ -78,9 +78,12 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+type FlowDirection = "up" | "down";
+
 type FlowDigitProps = MotionPreferences & {
   digit: number;
   duration: number;
+  direction: FlowDirection;
   isAnimated: boolean;
 };
 
@@ -97,7 +100,7 @@ const currentStyle: CSSProperties = {
 };
 
 function FlowDigit(props: FlowDigitProps): ReactElement {
-  const { digit, duration, isAnimated, respectReducedMotion = true } = props;
+  const { digit, duration, direction, isAnimated, respectReducedMotion = true } = props;
   const containerRef = useRef<HTMLSpanElement>(null);
   const currentRef = useRef<HTMLSpanElement>(null);
   const prevDigitRef = useRef(digit);
@@ -126,6 +129,9 @@ function FlowDigit(props: FlowDigitProps): ReactElement {
       return;
     }
 
+    const ghostExitOffset = direction === "up" ? "-100%" : "100%";
+    const incomingStartOffset = direction === "up" ? "100%" : "-100%";
+
     const ghost = document.createElement("span");
 
     ghost.textContent = String(previous);
@@ -142,7 +148,7 @@ function FlowDigit(props: FlowDigitProps): ReactElement {
     const ghostAnimation = ghost.animate(
       [
         { transform: "translateY(0)", opacity: 1 },
-        { transform: "translateY(-100%)", opacity: 0 }
+        { transform: `translateY(${ghostExitOffset})`, opacity: 0 }
       ],
       { duration, easing: FLOW_TIMING, fill: "forwards" }
     );
@@ -153,12 +159,12 @@ function FlowDigit(props: FlowDigitProps): ReactElement {
 
     current.animate(
       [
-        { transform: "translateY(100%)", opacity: 0 },
+        { transform: `translateY(${incomingStartOffset})`, opacity: 0 },
         { transform: "translateY(0)", opacity: 1 }
       ],
       { duration, easing: FLOW_TIMING }
     );
-  }, [digit, duration, isAnimated, respectReducedMotion]);
+  }, [digit, direction, duration, isAnimated, respectReducedMotion]);
 
   return (
     <span ref={containerRef} style={containerStyle}>
@@ -298,6 +304,14 @@ export function NumberFlow(props: NumberFlowProps): ReactElement {
   const effectiveDecimals = decimals ?? inferDecimals(value);
   const effectiveTarget = shouldDisplay ? value : 0;
 
+  const previousTargetRef = useRef(effectiveTarget);
+  const direction: FlowDirection =
+    effectiveTarget < previousTargetRef.current ? "down" : "up";
+
+  useEffect(() => {
+    previousTargetRef.current = effectiveTarget;
+  }, [effectiveTarget]);
+
   const counted = useCountedValue(
     effectiveTarget,
     duration,
@@ -351,6 +365,7 @@ export function NumberFlow(props: NumberFlowProps): ReactElement {
               key={index}
               digit={Number(char)}
               duration={duration}
+              direction={direction}
               isAnimated={!isCountMode}
               respectReducedMotion={respectReducedMotion}
             />

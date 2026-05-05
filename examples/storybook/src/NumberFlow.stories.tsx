@@ -131,6 +131,20 @@ function Playground({ mode }: { mode: PlaygroundMode }): React.ReactElement {
         <button
           type="button"
           style={button}
+          onClick={() => setValue((v) => v - 1)}
+        >
+          -1
+        </button>
+        <button
+          type="button"
+          style={button}
+          onClick={() => setValue((v) => v - 100)}
+        >
+          -100
+        </button>
+        <button
+          type="button"
+          style={button}
           onClick={() => setValue((v) => v + 25_000)}
         >
           +25,000
