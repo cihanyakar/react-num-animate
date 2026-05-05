@@ -195,6 +195,61 @@ function FlowDigit(props: FlowDigitProps): ReactElement {
   );
 }
 
+type FlowReelDigitProps = {
+  digitValue: number;
+};
+
+const reelContainerStyle: CSSProperties = {
+  display: "inline-block",
+  position: "relative",
+  verticalAlign: "top",
+  lineHeight: 1
+};
+
+const reelLowerStyle: CSSProperties = {
+  display: "inline-block"
+};
+
+const reelUpperStyle: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  top: 0,
+  right: 0,
+  textAlign: "center"
+};
+
+function FlowReelDigit(props: FlowReelDigitProps): ReactElement {
+  const safeValue = Number.isFinite(props.digitValue) ? props.digitValue : 0;
+  const lower = Math.floor(safeValue);
+  const frac = safeValue - lower;
+  const upper = (lower + 1) % 10;
+
+  return (
+    <span style={reelContainerStyle}>
+      <span
+        style={{
+          ...reelLowerStyle,
+          transform: `translateY(${(-frac * 100).toFixed(2)}%)`,
+          opacity: 1 - frac
+        }}
+      >
+        {lower}
+      </span>
+      {frac > 0 ? (
+        <span
+          style={{
+            ...reelUpperStyle,
+            transform: `translateY(${((1 - frac) * 100).toFixed(2)}%)`,
+            opacity: frac
+          }}
+        >
+          {upper}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function useCountedValue(
   target: number,
   duration: number,
@@ -220,6 +275,14 @@ function useCountedValue(
     }
 
     if (!Number.isFinite(target) || valueRef.current === target) {
+      valueRef.current = target;
+      setValue(target);
+
+      return;
+    }
+
+    // Count mode only animates forward; decrements snap to the new target.
+    if (target < valueRef.current) {
       valueRef.current = target;
       setValue(target);
 
@@ -259,30 +322,81 @@ function useCountedValue(
   return enabled ? value : target;
 }
 
-function alignDigits(
-  targetFormatted: string,
-  currentValue: number,
-  decimals: number
-): string {
-  const matches = targetFormatted.match(/\d/g);
+const EMPTY_VIEW_OPTIONS: UseInViewOptions = {};
 
-  if (!matches || matches.length === 0 || !Number.isFinite(currentValue)) {
-    return targetFormatted;
-  }
+const separatorSpanStyle: CSSProperties = { display: "inline-block" };
 
-  const targetCount = matches.length;
-  const factor = Math.pow(10, decimals);
-  const scaled = Math.round(Math.abs(currentValue) * factor);
-  const digitsStr = String(scaled)
-    .padStart(targetCount, "0")
-    .slice(-targetCount);
+function renderReelChars(
+  formatted: string,
+  renderValue: number,
+  effectiveDecimals: number
+): ReactElement[] {
+  const matches = formatted.match(/\d/g);
+  const totalDigits = matches ? matches.length : 0;
+  let digitIndex = 0;
 
-  let i = 0;
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread -- formatted output is digits and ASCII separators only, no surrogate pairs
+  return [...formatted].map((char, index) => {
+    if (char >= "0" && char <= "9") {
+      const place = totalDigits - digitIndex - 1 - effectiveDecimals;
+      const positional = (Math.abs(renderValue) / Math.pow(10, place)) % 10;
 
-  return targetFormatted.replace(/\d/g, () => digitsStr[i++] ?? "0");
+      digitIndex++;
+
+      return (
+        <FlowReelDigit
+          // eslint-disable-next-line react/no-array-index-key -- digit position is the stable identity
+          key={index}
+          digitValue={positional}
+        />
+      );
+    }
+
+    return (
+      <span
+        // eslint-disable-next-line react/no-array-index-key -- separator position is the stable identity
+        key={index}
+        style={separatorSpanStyle}
+      >
+        {char}
+      </span>
+    );
+  });
 }
 
-const EMPTY_VIEW_OPTIONS: UseInViewOptions = {};
+function renderCrossfadeChars(
+  formatted: string,
+  duration: number,
+  direction: FlowDirection,
+  respectReducedMotion: boolean
+): ReactElement[] {
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread -- formatted output is digits and ASCII separators only, no surrogate pairs
+  return [...formatted].map((char, index) => {
+    if (char >= "0" && char <= "9") {
+      return (
+        <FlowDigit
+          // eslint-disable-next-line react/no-array-index-key -- digit position is the stable identity
+          key={index}
+          digit={Number(char)}
+          duration={duration}
+          direction={direction}
+          isAnimated
+          respectReducedMotion={respectReducedMotion}
+        />
+      );
+    }
+
+    return (
+      <span
+        // eslint-disable-next-line react/no-array-index-key -- separator position is the stable identity
+        key={index}
+        style={separatorSpanStyle}
+      >
+        {char}
+      </span>
+    );
+  });
+}
 
 /**
  * Renders a number where each digit position is rendered in its own slot.
@@ -353,21 +467,17 @@ export function NumberFlow(props: NumberFlowProps): ReactElement {
   };
 
   const targetFormatted = formatValue(value);
-
-  let formatted: string;
-
-  if (isViewGated && !inView) {
-    formatted = targetFormatted.replace(/\d/g, "0");
-  } else if (isCountMode) {
-    formatted = alignDigits(targetFormatted, renderValue, effectiveDecimals);
-  } else {
-    formatted = targetFormatted;
-  }
+  const formatted =
+    isViewGated && !inView ? targetFormatted.replace(/\d/g, "0") : targetFormatted;
 
   const wrapperStyle: CSSProperties = {
     fontVariantNumeric: "tabular-nums",
     ...style
   };
+
+  const children = isCountMode
+    ? renderReelChars(formatted, renderValue, effectiveDecimals)
+    : renderCrossfadeChars(formatted, duration, direction, respectReducedMotion);
 
   return (
     <span
@@ -376,32 +486,7 @@ export function NumberFlow(props: NumberFlowProps): ReactElement {
       style={wrapperStyle}
     >
       {prefix}
-      {/* eslint-disable-next-line @typescript-eslint/no-misused-spread -- formatted output is digits and ASCII separators only, no surrogate pairs */}
-      {[...formatted].map((char, index) => {
-        if (char >= "0" && char <= "9") {
-          return (
-            <FlowDigit
-              // eslint-disable-next-line react/no-array-index-key -- digit position is the stable identity
-              key={index}
-              digit={Number(char)}
-              duration={duration}
-              direction={direction}
-              isAnimated={!isCountMode}
-              respectReducedMotion={respectReducedMotion}
-            />
-          );
-        }
-
-        return (
-          <span
-            // eslint-disable-next-line react/no-array-index-key -- separator position is the stable identity
-            key={index}
-            style={{ display: "inline-block" }}
-          >
-            {char}
-          </span>
-        );
-      })}
+      {children}
       {suffix}
     </span>
   );
