@@ -56,7 +56,7 @@ const meta: Meta<typeof NumberFlow> = {
     docs: {
       description: {
         component:
-          "Each digit position is rendered as a 0-9 reel; the visible digit slides through the column when the value changes. Pure CSS transforms, `font-variant-numeric: tabular-nums` for stable layout, native `IntersectionObserver` for viewport gating. No motion library."
+          "Each digit position renders one in-flow glyph. When the value changes, a ghost holding the previous glyph is appended and animates upward (or downward, on a decrement) while the new glyph slides in from the opposite side. No clipping or fade gradient — both glyphs hit `opacity: 0` by the time they reach the slot boundary. Set `mode=\"count\"` to tween the underlying value so every frame shows a real intermediate number."
       }
     }
   }
@@ -92,16 +92,19 @@ export const TurkishLocale: Story = {
   }
 };
 
-type PlaygroundMode = "digits" | "count";
+type PlaygroundProps = {
+  mode: "digits" | "count";
+  duration: number;
+};
 
-function Playground({ mode }: { mode: PlaygroundMode }): React.ReactElement {
+function Playground({ mode, duration }: PlaygroundProps): React.ReactElement {
   const [value, setValue] = useState(1234);
 
   return (
     <div style={card}>
       <NumberFlow
         value={value}
-        duration={mode === "count" ? 1500 : 600}
+        duration={duration}
         mode={mode}
         separator=","
         style={display}
@@ -157,25 +160,45 @@ function Playground({ mode }: { mode: PlaygroundMode }): React.ReactElement {
   );
 }
 
+const playgroundArgTypes: Meta<typeof NumberFlow>["argTypes"] = {
+  value: { table: { disable: true } },
+  decimals: { table: { disable: true } },
+  separator: { table: { disable: true } }
+};
+
 export const Interactive: Story = {
-  render: () => <Playground mode="digits" />,
+  args: {
+    mode: "digits",
+    duration: 600
+  },
+  argTypes: playgroundArgTypes,
+  render: (args) => (
+    <Playground mode={args.mode ?? "digits"} duration={args.duration ?? 600} />
+  ),
   parameters: {
     docs: {
       description: {
         story:
-          "`mode=\"digits\"` (default). Each digit position slides independently between cells of its 0-9 reel. The intermediate frames are not real numbers — only the digits-at-target are guaranteed."
+          "Buttons retarget the value through state. Each button click is a single transition; only the digit positions whose value changed animate. Toggle the `mode` control to compare the per-digit crossfade against the value tween in count mode."
       }
     }
   }
 };
 
 export const CountUp: Story = {
-  render: () => <Playground mode="count" />,
+  args: {
+    mode: "count",
+    duration: 1500
+  },
+  argTypes: playgroundArgTypes,
+  render: (args) => (
+    <Playground mode={args.mode ?? "count"} duration={args.duration ?? 1500} />
+  ),
   parameters: {
     docs: {
       description: {
         story:
-          "`mode=\"count\"`. The underlying value is tweened over `duration`, so every frame shows a valid intermediate number. The reels snap per frame, and the layout is preserved by zero-padding the in-flight value to the target's digit count."
+          "Same playground as `Interactive`, defaulting to `mode=\"count\"`. Every animation frame shows a valid intermediate number; the in-flight value is zero-padded to the target's digit count so the layout never shifts. Switch the `mode` control to `digits` to see the per-digit crossfade alternative."
       }
     }
   }
@@ -223,7 +246,7 @@ function ScrollRevealDemo(): React.ReactElement {
             fontSize: 14
           }}
         >
-          Each digit reels into place when the block enters the viewport.
+          Each digit slides into place when the block enters the viewport.
         </div>
       </div>
 
@@ -250,7 +273,7 @@ export const ScrollReveal: Story = {
     docs: {
       description: {
         story:
-          "Animation gated on viewport entry through the `animateOnView` prop. While outside the viewport the digits are pinned to zero, so the layout is stable and the reveal animation has full headroom to play."
+          "Animation gated on viewport entry through the `animateOnView` prop. While outside the viewport the digits are pinned to zero, so the layout is stable and the reveal has full headroom to play."
       }
     }
   },
