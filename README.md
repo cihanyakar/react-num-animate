@@ -127,7 +127,8 @@ function Card() {
 | Prop                   | Type                                                     | Description                                                                |
 | ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `value`                | `number`                                                 | Target value. Required.                                                    |
-| `duration`             | `number`                                                 | Per-digit transition duration in milliseconds (defaults to `600`).         |
+| `duration`             | `number`                                                 | Animation duration in milliseconds (defaults to `600`).                    |
+| `mode`                 | `"digits" \| "count"`                                    | `"digits"` slides each digit independently. `"count"` tweens the value so every frame is a real intermediate number (defaults to `"digits"`). |
 | `decimals`             | `number`                                                 | Digits after the decimal point. Inferred from `value` when omitted.        |
 | `prefix`               | `ReactNode`                                              | Rendered before the digits (not animated).                                 |
 | `suffix`               | `ReactNode`                                              | Rendered after the digits (not animated).                                  |
@@ -156,11 +157,23 @@ type UseInViewOptions = {
 };
 ```
 
+## Animation modes
+
+```tsx
+<NumberFlow value={1234} mode="digits" />  // default
+<NumberFlow value={1234} mode="count" />
+```
+
+- **`mode="digits"`** — each digit position slides independently between cells of its 0-9 reel. The intermediate frames are not real numbers, just digits in transit. Cheap (CSS transitions, no JS per frame), great for KPIs and stats where the destination matters more than the path.
+- **`mode="count"`** — the underlying value is tweened over `duration` so every animation frame shows a valid intermediate number, then each reel snaps per frame. The in-flight value is zero-padded to the target's digit count so the layout never shifts (`1,234` stays five characters wide whether the count is `0,005` or `1,234`).
+
 ## How it works
 
-Each digit position is a `position: relative; overflow: hidden` cell that is exactly `1em` tall. Inside it, a stack of `<span>0</span><span>1</span>...<span>9</span>` is translated vertically with `transform: translateY(-Nem)` where `N` is the active digit. CSS handles the transition, so retargeting `value` is just a state change in React; there is no `requestAnimationFrame` loop and no JS work per frame.
+Each digit position is a `position: relative; overflow: hidden` cell that is exactly `1em` tall. Inside it, a stack of `<span>0</span><span>1</span>...<span>9</span>` is translated vertically with `transform: translateY(-Nem)` where `N` is the active digit.
 
-Non-digit characters (separators, currency symbols, decimal points) are rendered as plain inline-blocks; only the digits move.
+In `digits` mode the column transition is a CSS `cubic-bezier`, so retargeting `value` is just a state change in React; there is no `requestAnimationFrame` loop and no JS work per frame. In `count` mode, `requestAnimationFrame` tweens the value and the reels snap each frame.
+
+The cell is masked with a vertical gradient so digits fade in and out at the edges of their reel instead of being hard-clipped. Non-digit characters (separators, currency symbols, decimal points) are rendered as plain inline-blocks; only the digits move.
 
 ## License
 

@@ -37,11 +37,13 @@ const meta: Meta<typeof NumberFlow> = {
     value: { control: { type: "number" } },
     duration: { control: { type: "number", min: 0, max: 3000, step: 50 } },
     decimals: { control: { type: "number", min: 0, max: 6, step: 1 } },
+    mode: { control: { type: "radio" }, options: ["digits", "count"] },
     respectReducedMotion: { control: "boolean" }
   },
   args: {
     value: 1234,
-    duration: 600
+    duration: 600,
+    mode: "digits"
   },
   decorators: [
     (Story) => (
@@ -90,12 +92,20 @@ export const TurkishLocale: Story = {
   }
 };
 
-function Playground(): React.ReactElement {
+type PlaygroundMode = "digits" | "count";
+
+function Playground({ mode }: { mode: PlaygroundMode }): React.ReactElement {
   const [value, setValue] = useState(1234);
 
   return (
     <div style={card}>
-      <NumberFlow value={value} duration={600} separator="," style={display} />
+      <NumberFlow
+        value={value}
+        duration={mode === "count" ? 1500 : 600}
+        mode={mode}
+        separator=","
+        style={display}
+      />
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
         <button
           type="button"
@@ -134,12 +144,24 @@ function Playground(): React.ReactElement {
 }
 
 export const Interactive: Story = {
-  render: () => <Playground />,
+  render: () => <Playground mode="digits" />,
   parameters: {
     docs: {
       description: {
         story:
-          "Retarget the value with the buttons below. Only digit positions whose value changed move; everything else is static. `+1` shows that just the trailing digit slides — the rest of the columns stay put."
+          "`mode=\"digits\"` (default). Each digit position slides independently between cells of its 0-9 reel. The intermediate frames are not real numbers — only the digits-at-target are guaranteed."
+      }
+    }
+  }
+};
+
+export const CountUp: Story = {
+  render: () => <Playground mode="count" />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "`mode=\"count\"`. The underlying value is tweened over `duration`, so every frame shows a valid intermediate number. The reels snap per frame, and the layout is preserved by zero-padding the in-flight value to the target's digit count."
       }
     }
   }
