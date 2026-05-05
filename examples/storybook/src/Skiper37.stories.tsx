@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useEffect, useRef, useState } from "react";
-import { AnimatedNumber } from "react-num-animate";
+import { AnimatedNumber, NumberFlow } from "react-num-animate";
 
 const display: React.CSSProperties = {
   fontSize: 96,
@@ -218,10 +218,9 @@ function ViewportDemo(): React.ReactElement {
       </div>
 
       <div style={card}>
-        <AnimatedNumber
+        <NumberFlow
           value={123_456}
-          duration={2200}
-          easing="easeOutExpo"
+          duration={650}
           separator=","
           animateOnView
           style={display}
@@ -233,7 +232,7 @@ function ViewportDemo(): React.ReactElement {
             fontSize: 14
           }}
         >
-          Counts up the first time it scrolls into view.
+          Each digit fades upward when the block scrolls into view.
         </div>
       </div>
 
@@ -255,15 +254,64 @@ function ViewportDemo(): React.ReactElement {
 }
 
 export const Variant4OnView: Story = {
-  name: "004 — Animate on view",
+  name: "004 — NumberFlow on view",
   parameters: {
     layout: "padded",
     docs: {
       description: {
         story:
-          "Animation is gated on viewport entry via the native `IntersectionObserver` API exposed through the lib's `useInView` hook. Replaces both `react-intersection-observer` and `@number-flow/react` from the original demo."
+          "Per-digit upward fade animation gated on viewport entry. Each digit's old glyph slides up and fades out while the new glyph slides up from below and fades in, all driven by the Web Animations API. Native `IntersectionObserver` replaces `react-intersection-observer` and the per-digit choreography replaces `@number-flow/react`."
       }
     }
   },
   render: () => <ViewportDemo />
+};
+
+function NumberFlowInteractive(): React.ReactElement {
+  const [value, setValue] = useState(1234);
+
+  return (
+    <div style={card}>
+      <NumberFlow value={value} duration={500} separator="," style={display} />
+      <div style={{ display: "flex", gap: 12 }}>
+        <button
+          type="button"
+          style={button}
+          onClick={() => setValue(Math.floor(Math.random() * 1_000_000))}
+        >
+          Random
+        </button>
+        <button
+          type="button"
+          style={button}
+          onClick={() => setValue((v) => v + 1)}
+        >
+          +1
+        </button>
+        <button
+          type="button"
+          style={button}
+          onClick={() => setValue((v) => v + 100)}
+        >
+          +100
+        </button>
+        <button type="button" style={button} onClick={() => setValue(0)}>
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export const NumberFlowPlayground: Story = {
+  name: "Bonus — NumberFlow playground",
+  render: () => <NumberFlowInteractive />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Try retargeting `NumberFlow` interactively. Only the digits that actually changed animate; the separator stays put. `+1` shows that the trailing digit alone animates while the rest are static."
+      }
+    }
+  }
 };
