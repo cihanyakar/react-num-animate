@@ -5,13 +5,14 @@
 [![types](https://img.shields.io/npm/types/react-num-animate.svg)](https://www.npmjs.com/package/react-num-animate)
 [![license](https://img.shields.io/npm/l/react-num-animate.svg)](./LICENSE)
 
-A lightweight, dependency-free React component and hook for smoothly animating numeric values. Comes with built-in easings, full `Intl.NumberFormat` support, custom formatters, render props, and respect for `prefers-reduced-motion`.
+A lightweight, dependency-free React component and hook for smoothly animating numeric values. Comes with built-in easings (including spring, elastic, back, and bounce), full `Intl.NumberFormat` support, custom formatters, render props, viewport-gated animation via the native `IntersectionObserver`, and respect for `prefers-reduced-motion`.
 
 - Zero runtime dependencies (peer dependency on React only)
 - ESM and CJS builds, full TypeScript types included
-- ~2 KB minzipped
-- Built on `requestAnimationFrame`, no timers
+- ~3 KB minzipped
+- Built on `requestAnimationFrame` and `IntersectionObserver`, no timer hacks or polyfills
 - SSR-safe
+- Integer targets render integer frames automatically (precision is inferred from `value`)
 
 ## Installation
 
@@ -115,7 +116,38 @@ import { AnimatedNumber, easings } from "react-num-animate";
 />
 ```
 
-Built-in easings include `linear`, `easeIn/Out/InOutQuad`, `easeIn/Out/InOutCubic`, `easeIn/Out/InOutQuart`, `easeIn/Out/InOutExpo`.
+Built-in easings include `linear`, `easeIn/Out/InOutQuad`, `easeIn/Out/InOutCubic`, `easeIn/Out/InOutQuart`, `easeIn/Out/InOutExpo`, `easeIn/Out/InOutBack`, `easeOutElastic`, `easeOutBounce`, and `spring`.
+
+### Animate when scrolled into view
+
+```tsx
+<AnimatedNumber value={123_456} duration={2000} animateOnView />
+```
+
+Pass `animateOnView` to defer the animation until the element first enters the viewport (powered by the native `IntersectionObserver`). Pass an options object to customise threshold or root margin.
+
+```tsx
+<AnimatedNumber
+  value={500}
+  animateOnView={{ threshold: 0.5, rootMargin: "-50px" }}
+/>
+```
+
+The standalone `useInView` hook is also exported for use without the component.
+
+```tsx
+import { useInView } from "react-num-animate";
+
+function Card() {
+  const [ref, inView] = useInView({ threshold: 0.5 });
+
+  return (
+    <section ref={ref}>
+      {inView ? "visible" : "hidden"}
+    </section>
+  );
+}
+```
 
 ### Hook for full control
 
@@ -153,6 +185,7 @@ function Speedometer({ rpm }: { rpm: number }) {
 | `className`            | `string`                                                 | Class name for the rendered element.                                       |
 | `style`                | `CSSProperties`                                          | Inline styles for the rendered element.                                    |
 | `ariaLive`             | `"off" \| "polite" \| "assertive"`                       | `aria-live` politeness (defaults to `"off"`).                              |
+| `animateOnView`        | `boolean \| UseInViewOptions`                            | Defer the animation until the element enters the viewport.                 |
 | `children`             | `(formatted, value) => ReactNode`                        | Render prop. When provided, `prefix` and `suffix` are ignored.             |
 | `onUpdate`             | `(value: number) => void`                                | Called on every animation frame.                                           |
 | `onComplete`           | `(value: number) => void`                                | Called when the animation reaches its target.                              |
@@ -170,6 +203,22 @@ function useAnimatedNumber(
 
 `UseAnimatedNumberOptions` includes `duration`, `easing`, `animateOnMount`, `respectReducedMotion`, `onUpdate`, and `onComplete` with the same semantics as the component props.
 
+### `useInView(options?)`
+
+Native `IntersectionObserver` hook returning `[ref, inView]`. Powers `animateOnView` but is also exported for general use.
+
+```ts
+function useInView<T extends Element = HTMLElement>(
+  options?: UseInViewOptions,
+): [RefObject<T | null>, boolean];
+
+type UseInViewOptions = {
+  rootMargin?: string;   // "0px"
+  threshold?: number | number[]; // 0.1
+  once?: boolean;        // true
+};
+```
+
 ### `easings`
 
 A record of built-in easing functions you can pass directly or by name.
@@ -178,6 +227,7 @@ A record of built-in easing functions you can pass directly or by name.
 import { easings } from "react-num-animate";
 
 easings.easeInOutCubic(0.5); // 0.5
+easings.spring(0.5);          // ~1.17 (overshoot then settle)
 ```
 
 ## Behavior

@@ -8,6 +8,7 @@ import {
   useAnimatedNumber,
   type UseAnimatedNumberOptions
 } from "./useAnimatedNumber.js";
+import { useInView, type UseInViewOptions } from "./useInView.js";
 
 type LocaleArg =
   | true
@@ -18,7 +19,11 @@ type LocaleArg =
 export type AnimatedNumberProps = {
   /** The target numeric value to animate towards. */
   value: number;
-  /** Number of digits after the decimal point. */
+  /**
+   * Digits after the decimal point. When omitted, the precision is inferred
+   * from `value`, so an integer target renders integer frames during the
+   * animation instead of bleeding through floating-point intermediates.
+   */
   decimals?: number;
   /** Content rendered before the formatted number. */
   prefix?: ReactNode;
@@ -44,21 +49,39 @@ export type AnimatedNumberProps = {
   /** `aria-live` politeness level (defaults to `"off"`). */
   ariaLive?: "off" | "polite" | "assertive";
   /**
+   * Defer the animation until the element first enters the viewport. Pass
+   * `true` for default options or an object to customise threshold/rootMargin.
+   * Implemented with the native `IntersectionObserver` API (no third-party
+   * dependency).
+   */
+  animateOnView?: boolean | UseInViewOptions;
+  /**
    * Render prop that receives the formatted string and the current numeric value.
    * When provided, `prefix` and `suffix` are ignored.
    */
   children?: (formatted: string, value: number) => ReactNode;
 } & UseAnimatedNumberOptions;
 
+function inferDecimals(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  const str = String(value);
+  const dot = str.indexOf(".");
+
+  return dot === -1 ? 0 : str.length - dot - 1;
+}
+
 function formatWithSeparators(
   value: number,
-  decimals: number | undefined,
+  decimals: number,
   separator: string | undefined,
   decimalSeparator: string | undefined
 ): string {
   if (!Number.isFinite(value)) {return String(value);}
 
-  const fixed = decimals !== undefined ? value.toFixed(decimals) : String(value);
+  const fixed = value.toFixed(decimals);
   const dotIndex = fixed.indexOf(".");
   const intPart = dotIndex === -1 ? fixed : fixed.slice(0, dotIndex);
   const fracPart = dotIndex === -1 ? undefined : fixed.slice(dotIndex + 1);
@@ -82,7 +105,7 @@ function formatWithSeparators(
 function formatWithIntl(
   value: number,
   locale: LocaleArg,
-  decimals: number | undefined
+  decimals: number
 ): string {
   let locales: string | string[] | undefined;
   let options: Intl.NumberFormatOptions = {};
@@ -98,17 +121,18 @@ function formatWithIntl(
     options = { ...locale };
   }
 
-  if (decimals !== undefined) {
-    options.minimumFractionDigits = decimals;
-    options.maximumFractionDigits = decimals;
-  }
+  options.minimumFractionDigits = decimals;
+  options.maximumFractionDigits = decimals;
 
   return new Intl.NumberFormat(locales, options).format(value);
 }
 
+const EMPTY_VIEW_OPTIONS: UseInViewOptions = {};
+
 /**
  * React component that renders a numeric value with a smooth easing animation
- * whenever `value` changes. Built on top of {@link useAnimatedNumber}.
+ * whenever `value` changes. Built on top of {@link useAnimatedNumber} and the
+ * native `IntersectionObserver` API.
  */
 export function AnimatedNumber(props: AnimatedNumberProps): ReactElement {
   const {
@@ -129,11 +153,20 @@ export function AnimatedNumber(props: AnimatedNumberProps): ReactElement {
     easing,
     animateOnMount,
     respectReducedMotion,
+    animateOnView,
     onUpdate,
     onComplete
   } = props;
 
-  const current = useAnimatedNumber(value, {
+  const inViewOptions =
+    typeof animateOnView === "object" ? animateOnView : EMPTY_VIEW_OPTIONS;
+  const [viewRef, inView] = useInView(inViewOptions);
+
+  const isViewGated = Boolean(animateOnView);
+  const shouldAnimate = !isViewGated || inView;
+  const targetValue = shouldAnimate ? value : 0;
+
+  const current = useAnimatedNumber(targetValue, {
     duration,
     easing,
     animateOnMount,
@@ -142,16 +175,23 @@ export function AnimatedNumber(props: AnimatedNumberProps): ReactElement {
     onComplete
   });
 
+  const effectiveDecimals = decimals ?? inferDecimals(value);
+
   const formatted = format
     ? format(current)
     : locale !== undefined
-      ? formatWithIntl(current, locale, decimals)
-      : formatWithSeparators(current, decimals, separator, decimalSeparator);
+      ? formatWithIntl(current, locale, effectiveDecimals)
+      : formatWithSeparators(current, effectiveDecimals, separator, decimalSeparator);
 
-  const Component = (as ?? "span");
+  const Component = as ?? "span";
 
   return (
-    <Component className={className} style={style} aria-live={ariaLive}>
+    <Component
+      ref={isViewGated ? viewRef : undefined}
+      className={className}
+      style={style}
+      aria-live={ariaLive}
+    >
       {children ? children(formatted, current) : (
         <>
           {prefix}
