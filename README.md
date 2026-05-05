@@ -169,11 +169,11 @@ type UseInViewOptions = {
 
 ## How it works
 
-Each digit position is a `position: relative; overflow: hidden` cell that is exactly `1em` tall. Inside it, a stack of `<span>0</span><span>1</span>...<span>9</span>` is translated vertically with `transform: translateY(-Nem)` where `N` is the active digit.
+Each digit position is a `position: relative` slot containing a single in-flow glyph. The slot has no `overflow: hidden` and no mask. When the digit prop changes, a temporary ghost element holding the previous glyph is appended to the slot and animated upward (`translateY(0) → translateY(-100%)`) while fading to `opacity: 0`. At the same time the new glyph (already mounted) animates up from below (`translateY(100%) → 0`) while fading in. Both transitions run via the Web Animations API. By the time either glyph reaches the slot boundary it is fully transparent, so no clipping is required.
 
-In `digits` mode the column transition is a CSS `cubic-bezier`, so retargeting `value` is just a state change in React; there is no `requestAnimationFrame` loop and no JS work per frame. In `count` mode, `requestAnimationFrame` tweens the value and the reels snap each frame.
+In `digits` mode this per-digit choreography fires whenever a digit changes. In `count` mode the per-digit animation is disabled and `requestAnimationFrame` tweens the underlying value instead, so each frame just renders the current intermediate number.
 
-The cell is masked with a vertical gradient so digits fade in and out at the edges of their reel instead of being hard-clipped. Non-digit characters (separators, currency symbols, decimal points) are rendered as plain inline-blocks; only the digits move.
+Non-digit characters (separators, currency symbols, decimal points) are rendered as plain inline-blocks; only the digits move.
 
 ## License
 

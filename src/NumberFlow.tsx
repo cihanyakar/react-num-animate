@@ -32,10 +32,11 @@ export type NumberFlowProps = MotionPreferences & {
   /**
    * Animation strategy.
    *
-   * - `"digits"` (default): each digit position slides independently between
-   *   cells of a 0-9 reel. The intermediate frames are not real numbers.
+   * - `"digits"` (default): when a digit position changes, the old glyph
+   *   slides up and fades out while the new glyph slides up from below
+   *   and fades in. The intermediate frames are not real numbers.
    * - `"count"`: the underlying value is tweened over `duration`, so every
-   *   frame shows a valid intermediate number. Reels snap per frame.
+   *   frame shows a valid intermediate number. Digits snap per frame.
    */
   mode?: FlowMode;
   /**
@@ -67,10 +68,7 @@ export type NumberFlowProps = MotionPreferences & {
   style?: CSSProperties;
 };
 
-const REEL_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
-const REEL_TIMING = "cubic-bezier(0.22, 1, 0.36, 1)";
-const FADE_GRADIENT =
-  "linear-gradient(to bottom, transparent 0, #000 0.18em, #000 calc(100% - 0.18em), transparent 100%)";
+const FLOW_TIMING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -80,48 +78,92 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-const cellStyle: CSSProperties = {
-  display: "block",
-  height: "1em",
-  lineHeight: 1
-};
-
 type FlowDigitProps = MotionPreferences & {
   digit: number;
   duration: number;
   isAnimated: boolean;
 };
 
+const containerStyle: CSSProperties = {
+  display: "inline-block",
+  position: "relative",
+  verticalAlign: "top",
+  lineHeight: 1
+};
+
+const currentStyle: CSSProperties = {
+  display: "inline-block",
+  willChange: "transform, opacity"
+};
+
 function FlowDigit(props: FlowDigitProps): ReactElement {
   const { digit, duration, isAnimated, respectReducedMotion = true } = props;
-  const reduced = respectReducedMotion && prefersReducedMotion();
-  const useTransition = isAnimated && !reduced;
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const currentRef = useRef<HTMLSpanElement>(null);
+  const prevDigitRef = useRef(digit);
 
-  const reelStyle: CSSProperties = {
-    display: "block",
-    transform: `translateY(${-digit}em)`,
-    transition: useTransition ? `transform ${duration}ms ${REEL_TIMING}` : "none",
-    willChange: useTransition ? "transform" : undefined
-  };
+  useEffect(() => {
+    const previous = prevDigitRef.current;
 
-  const cellWrapperStyle: CSSProperties = {
-    display: "inline-block",
-    height: "1em",
-    lineHeight: 1,
-    overflow: "hidden",
-    verticalAlign: "top",
-    WebkitMaskImage: FADE_GRADIENT,
-    maskImage: FADE_GRADIENT
-  };
+    if (previous === digit) {
+      return;
+    }
+
+    prevDigitRef.current = digit;
+
+    if (!isAnimated) {
+      return;
+    }
+
+    if (respectReducedMotion && prefersReducedMotion()) {
+      return;
+    }
+
+    const container = containerRef.current;
+    const current = currentRef.current;
+
+    if (!container || !current || typeof current.animate !== "function") {
+      return;
+    }
+
+    const ghost = document.createElement("span");
+
+    ghost.textContent = String(previous);
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.style.position = "absolute";
+    ghost.style.left = "0";
+    ghost.style.top = "0";
+    ghost.style.right = "0";
+    ghost.style.textAlign = "center";
+    ghost.style.willChange = "transform, opacity";
+    ghost.style.pointerEvents = "none";
+    container.appendChild(ghost);
+
+    const ghostAnimation = ghost.animate(
+      [
+        { transform: "translateY(0)", opacity: 1 },
+        { transform: "translateY(-100%)", opacity: 0 }
+      ],
+      { duration, easing: FLOW_TIMING, fill: "forwards" }
+    );
+
+    ghostAnimation.onfinish = () => {
+      ghost.remove();
+    };
+
+    current.animate(
+      [
+        { transform: "translateY(100%)", opacity: 0 },
+        { transform: "translateY(0)", opacity: 1 }
+      ],
+      { duration, easing: FLOW_TIMING }
+    );
+  }, [digit, duration, isAnimated, respectReducedMotion]);
 
   return (
-    <span style={cellWrapperStyle}>
-      <span style={reelStyle}>
-        {REEL_DIGITS.map((d) => (
-          <span key={d} style={cellStyle}>
-            {d}
-          </span>
-        ))}
+    <span ref={containerRef} style={containerStyle}>
+      <span ref={currentRef} style={currentStyle}>
+        {digit}
       </span>
     </span>
   );
@@ -217,15 +259,15 @@ function alignDigits(
 const EMPTY_VIEW_OPTIONS: UseInViewOptions = {};
 
 /**
- * Renders a number where each digit independently slides between cells of a
- * 0-9 reel when `value` changes. Pure CSS transforms drive the motion, with
- * the layout pinned by `font-variant-numeric: tabular-nums` so digits never
- * shift sideways. The reel cells are masked with a vertical gradient so the
- * digits fade in and out at the edges instead of being hard-clipped.
+ * Renders a number where each digit position is rendered in its own slot.
+ * When a digit changes, the previous glyph slides upward and fades out while
+ * the new glyph slides up from below and fades in. The slot has no overflow
+ * clipping or mask gradient — the fading opacity hides the digits before
+ * they reach the slot boundary.
  *
- * Set `mode="count"` to tween the underlying value over `duration` so that
- * every animation frame shows a valid intermediate number; the reels snap
- * per frame and the layout is preserved by zero-padding.
+ * Set `mode="count"` to tween the underlying value over `duration` so every
+ * animation frame shows a valid intermediate number; in that mode the per-
+ * digit animation is disabled and only the value updates each frame.
  */
 export function NumberFlow(props: NumberFlowProps): ReactElement {
   const {
