@@ -203,11 +203,15 @@ const reelContainerStyle: CSSProperties = {
   display: "inline-block",
   position: "relative",
   verticalAlign: "top",
-  lineHeight: 1
+  lineHeight: 1,
+  height: "1em",
+  overflow: "hidden"
 };
 
 const reelLowerStyle: CSSProperties = {
-  display: "inline-block"
+  display: "inline-block",
+  height: "1em",
+  lineHeight: 1
 };
 
 const reelUpperStyle: CSSProperties = {
@@ -215,6 +219,8 @@ const reelUpperStyle: CSSProperties = {
   left: 0,
   top: 0,
   right: 0,
+  height: "1em",
+  lineHeight: 1,
   textAlign: "center"
 };
 
