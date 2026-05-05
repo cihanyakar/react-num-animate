@@ -1,12 +1,12 @@
-import {
-  type CSSProperties,
-  type ElementType,
-  type ReactElement,
-  type ReactNode,
+import type {
+  CSSProperties,
+  ElementType,
+  ReactElement,
+  ReactNode
 } from "react";
 import {
   useAnimatedNumber,
-  type UseAnimatedNumberOptions,
+  type UseAnimatedNumberOptions
 } from "./useAnimatedNumber.js";
 
 type LocaleArg =
@@ -15,7 +15,7 @@ type LocaleArg =
   | Intl.NumberFormatOptions
   | [string | string[], Intl.NumberFormatOptions];
 
-export interface AnimatedNumberProps extends UseAnimatedNumberOptions {
+export type AnimatedNumberProps = {
   /** The target numeric value to animate towards. */
   value: number;
   /** Number of digits after the decimal point. */
@@ -48,15 +48,15 @@ export interface AnimatedNumberProps extends UseAnimatedNumberOptions {
    * When provided, `prefix` and `suffix` are ignored.
    */
   children?: (formatted: string, value: number) => ReactNode;
-}
+} & UseAnimatedNumberOptions;
 
 function formatWithSeparators(
   value: number,
   decimals: number | undefined,
   separator: string | undefined,
-  decimalSeparator: string | undefined,
+  decimalSeparator: string | undefined
 ): string {
-  if (!Number.isFinite(value)) return String(value);
+  if (!Number.isFinite(value)) {return String(value);}
 
   const fixed = decimals !== undefined ? value.toFixed(decimals) : String(value);
   const dotIndex = fixed.indexOf(".");
@@ -64,22 +64,25 @@ function formatWithSeparators(
   const fracPart = dotIndex === -1 ? undefined : fixed.slice(dotIndex + 1);
 
   let intFormatted = intPart;
+
   if (separator) {
     const negative = intPart.startsWith("-");
     const digits = negative ? intPart.slice(1) : intPart;
+
     intFormatted =
       (negative ? "-" : "") +
       digits.replace(/\B(?=(\d{3})+(?!\d))/g, separator);
   }
 
-  if (fracPart === undefined) return intFormatted;
+  if (fracPart === undefined) {return intFormatted;}
+
   return intFormatted + (decimalSeparator ?? ".") + fracPart;
 }
 
 function formatWithIntl(
   value: number,
   locale: LocaleArg,
-  decimals: number | undefined,
+  decimals: number | undefined
 ): string {
   let locales: string | string[] | undefined;
   let options: Intl.NumberFormatOptions = {};
@@ -127,7 +130,7 @@ export function AnimatedNumber(props: AnimatedNumberProps): ReactElement {
     animateOnMount,
     respectReducedMotion,
     onUpdate,
-    onComplete,
+    onComplete
   } = props;
 
   const current = useAnimatedNumber(value, {
@@ -136,7 +139,7 @@ export function AnimatedNumber(props: AnimatedNumberProps): ReactElement {
     animateOnMount,
     respectReducedMotion,
     onUpdate,
-    onComplete,
+    onComplete
   });
 
   const formatted = format
@@ -145,7 +148,7 @@ export function AnimatedNumber(props: AnimatedNumberProps): ReactElement {
       ? formatWithIntl(current, locale, decimals)
       : formatWithSeparators(current, decimals, separator, decimalSeparator);
 
-  const Component = (as ?? "span") as ElementType;
+  const Component = (as ?? "span");
 
   return (
     <Component className={className} style={style} aria-live={ariaLive}>

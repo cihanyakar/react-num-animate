@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { easings, type Easing, type EasingName } from "./easings.js";
 
-export interface UseAnimatedNumberOptions {
+export type UseAnimatedNumberOptions = {
   /** Animation duration in milliseconds (defaults to 800). */
   duration?: number;
   /** Easing function or name of a built-in easing (defaults to `"easeOutCubic"`). */
@@ -14,13 +14,14 @@ export interface UseAnimatedNumberOptions {
   onUpdate?: (value: number) => void;
   /** Called once when the animation finishes (or when value changes with no animation). */
   onComplete?: (value: number) => void;
-}
+};
 
 const DEFAULT_DURATION = 800;
 const DEFAULT_EASING: EasingName = "easeOutCubic";
 
 function resolveEasing(value: Easing | EasingName | undefined): Easing {
-  if (typeof value === "function") return value;
+  if (typeof value === "function") {return value;}
+
   return easings[value ?? DEFAULT_EASING];
 }
 
@@ -28,6 +29,7 @@ function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return false;
   }
+
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
@@ -39,7 +41,7 @@ function prefersReducedMotion(): boolean {
  */
 export function useAnimatedNumber(
   target: number,
-  options: UseAnimatedNumberOptions = {},
+  options: UseAnimatedNumberOptions = {}
 ): number {
   const {
     duration = DEFAULT_DURATION,
@@ -47,7 +49,7 @@ export function useAnimatedNumber(
     animateOnMount = false,
     respectReducedMotion = true,
     onUpdate,
-    onComplete,
+    onComplete
   } = options;
 
   const initial = animateOnMount ? 0 : target;
@@ -59,6 +61,7 @@ export function useAnimatedNumber(
 
   const onUpdateRef = useRef(onUpdate);
   const onCompleteRef = useRef(onComplete);
+
   useEffect(() => {
     onUpdateRef.current = onUpdate;
     onCompleteRef.current = onComplete;
@@ -69,6 +72,7 @@ export function useAnimatedNumber(
       hasMountedRef.current = true;
       valueRef.current = target;
       setValue(target);
+
       return;
     }
     hasMountedRef.current = true;
@@ -76,6 +80,7 @@ export function useAnimatedNumber(
     if (!Number.isFinite(target)) {
       valueRef.current = target;
       setValue(target);
+
       return;
     }
 
@@ -84,6 +89,7 @@ export function useAnimatedNumber(
       setValue(target);
       onUpdateRef.current?.(target);
       onCompleteRef.current?.(target);
+
       return;
     }
 
@@ -93,6 +99,7 @@ export function useAnimatedNumber(
 
     if (diff === 0) {
       onCompleteRef.current?.(to);
+
       return;
     }
 
