@@ -5,14 +5,16 @@
 [![types](https://img.shields.io/npm/types/react-num-animate.svg)](https://www.npmjs.com/package/react-num-animate)
 [![license](https://img.shields.io/npm/l/react-num-animate.svg)](./LICENSE)
 
-A lightweight, dependency-free React component and hook for smoothly animating numeric values. Comes with built-in easings (including spring, elastic, back, and bounce), full `Intl.NumberFormat` support, custom formatters, render props, viewport-gated animation via the native `IntersectionObserver`, and respect for `prefers-reduced-motion`.
+A dependency-free React component that animates numbers one digit at a time. Each digit position is rendered as a 0-9 reel; when the value changes, the column slides to expose the new digit. Built on plain CSS transforms and the native `IntersectionObserver`, no motion library required.
 
 - Zero runtime dependencies (peer dependency on React only)
 - ESM and CJS builds, full TypeScript types included
-- ~3 KB minzipped
-- Built on `requestAnimationFrame` and `IntersectionObserver`, no timer hacks or polyfills
+- ~2 KB minzipped, animation driven entirely by CSS transitions
+- `font-variant-numeric: tabular-nums` by default so the layout never shifts
+- Native `IntersectionObserver` for viewport-gated reveals
+- Full `Intl.NumberFormat` support (locales, currency, percent, compact, custom formatters)
+- Respects `prefers-reduced-motion`
 - SSR-safe
-- Integer targets render integer frames automatically (precision is inferred from `value`)
 
 ## Installation
 
@@ -34,14 +36,16 @@ React 19+ is supported as a peer dependency.
 
 ```tsx
 import { useState } from "react";
-import { AnimatedNumber } from "react-num-animate";
+import { NumberFlow } from "react-num-animate";
 
-export function Counter() {
-  const [count, setCount] = useState(0);
+export function Stat() {
+  const [count, setCount] = useState(1234);
   return (
     <div>
-      <AnimatedNumber value={count} duration={1200} />
-      <button onClick={() => setCount((c) => c + 1000)}>+1000</button>
+      <NumberFlow value={count} separator="," />
+      <button onClick={() => setCount(Math.floor(Math.random() * 1_000_000))}>
+        Roll
+      </button>
     </div>
   );
 }
@@ -49,10 +53,10 @@ export function Counter() {
 
 ## Examples
 
-### Decimals, separators, prefix and suffix
+### Decimals and separators
 
 ```tsx
-<AnimatedNumber
+<NumberFlow
   value={1234567.89}
   decimals={2}
   separator=","
@@ -62,21 +66,16 @@ export function Counter() {
 />
 ```
 
-### Locale-aware formatting with `Intl.NumberFormat`
+`decimals` is inferred from `value` when omitted, so an integer target renders only integer digits.
+
+### Locale-aware formatting
 
 ```tsx
-<AnimatedNumber
-  value={42500.5}
-  locale="tr-TR"
-  decimals={2}
-/>
+<NumberFlow value={42500.5} locale="tr-TR" decimals={2} />
 
-<AnimatedNumber
-  value={1500}
-  locale={{ style: "currency", currency: "EUR" }}
-/>
+<NumberFlow value={1500} locale={{ style: "currency", currency: "EUR" }} />
 
-<AnimatedNumber
+<NumberFlow
   value={0.873}
   locale={["en-US", { style: "percent", minimumFractionDigits: 1 }]}
 />
@@ -87,53 +86,25 @@ export function Counter() {
 ```tsx
 const compact = new Intl.NumberFormat("en", { notation: "compact" });
 
-<AnimatedNumber
-  value={1_250_000}
-  format={(n) => compact.format(n)}
-/>
+<NumberFlow value={1_250_000} format={(n) => compact.format(n)} />
 ```
 
-### Render prop for custom markup
+### Reveal on scroll
 
 ```tsx
-<AnimatedNumber value={count}>
-  {(formatted, raw) => (
-    <span aria-label={`Total ${raw}`}>{formatted}</span>
-  )}
-</AnimatedNumber>
+<NumberFlow value={123_456} duration={900} separator="," animateOnView />
 ```
 
-### Easing functions
+While outside the viewport the digits are pinned to zero (so the layout stays stable). When the element first scrolls into view, every column slides to its target digit. Pass an options object to tune threshold or root margin.
 
 ```tsx
-import { AnimatedNumber, easings } from "react-num-animate";
-
-<AnimatedNumber value={value} easing="easeInOutCubic" />
-
-<AnimatedNumber
-  value={value}
-  easing={(t) => 1 - Math.pow(1 - t, 5)}
-/>
-```
-
-Built-in easings include `linear`, `easeIn/Out/InOutQuad`, `easeIn/Out/InOutCubic`, `easeIn/Out/InOutQuart`, `easeIn/Out/InOutExpo`, `easeIn/Out/InOutBack`, `easeOutElastic`, `easeOutBounce`, and `spring`.
-
-### Animate when scrolled into view
-
-```tsx
-<AnimatedNumber value={123_456} duration={2000} animateOnView />
-```
-
-Pass `animateOnView` to defer the animation until the element first enters the viewport (powered by the native `IntersectionObserver`). Pass an options object to customise threshold or root margin.
-
-```tsx
-<AnimatedNumber
+<NumberFlow
   value={500}
   animateOnView={{ threshold: 0.5, rootMargin: "-50px" }}
 />
 ```
 
-The standalone `useInView` hook is also exported for use without the component.
+### Standalone `useInView` hook
 
 ```tsx
 import { useInView } from "react-num-animate";
@@ -149,59 +120,25 @@ function Card() {
 }
 ```
 
-### Hook for full control
-
-```tsx
-import { useAnimatedNumber } from "react-num-animate";
-
-function Speedometer({ rpm }: { rpm: number }) {
-  const animated = useAnimatedNumber(rpm, {
-    duration: 600,
-    easing: "easeOutQuart",
-  });
-  return <Gauge angle={animated * 0.36} />;
-}
-```
-
 ## API
 
-### `<AnimatedNumber>`
+### `<NumberFlow>`
 
 | Prop                   | Type                                                     | Description                                                                |
 | ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `value`                | `number`                                                 | Target value to animate towards. Required.                                 |
-| `duration`             | `number`                                                 | Animation duration in milliseconds (defaults to `800`).                    |
-| `easing`               | `EasingName \| (t: number) => number`                    | Easing function or built-in easing name (defaults to `"easeOutCubic"`).    |
-| `animateOnMount`       | `boolean`                                                | Animate from `0` to the initial value on first render (defaults to false). |
-| `respectReducedMotion` | `boolean`                                                | Snap to the target when reduced motion is requested (defaults to true).    |
-| `decimals`             | `number`                                                 | Number of digits after the decimal point.                                  |
-| `prefix`               | `ReactNode`                                              | Rendered before the formatted number.                                      |
-| `suffix`               | `ReactNode`                                              | Rendered after the formatted number.                                       |
+| `value`                | `number`                                                 | Target value. Required.                                                    |
+| `duration`             | `number`                                                 | Per-digit transition duration in milliseconds (defaults to `600`).         |
+| `decimals`             | `number`                                                 | Digits after the decimal point. Inferred from `value` when omitted.        |
+| `prefix`               | `ReactNode`                                              | Rendered before the digits (not animated).                                 |
+| `suffix`               | `ReactNode`                                              | Rendered after the digits (not animated).                                  |
 | `separator`            | `string`                                                 | Thousands separator. Ignored when `locale` or `format` is set.             |
 | `decimalSeparator`     | `string`                                                 | Decimal separator. Ignored when `locale` or `format` is set.               |
 | `locale`               | `true \| string \| Intl.NumberFormatOptions \| [l, opts]` | Use `Intl.NumberFormat` for formatting.                                    |
 | `format`               | `(value: number) => string`                              | Custom formatter. Takes precedence over the other formatting props.        |
-| `as`                   | `ElementType`                                            | Element type to render (defaults to `"span"`).                             |
-| `className`            | `string`                                                 | Class name for the rendered element.                                       |
-| `style`                | `CSSProperties`                                          | Inline styles for the rendered element.                                    |
-| `ariaLive`             | `"off" \| "polite" \| "assertive"`                       | `aria-live` politeness (defaults to `"off"`).                              |
 | `animateOnView`        | `boolean \| UseInViewOptions`                            | Defer the animation until the element enters the viewport.                 |
-| `children`             | `(formatted, value) => ReactNode`                        | Render prop. When provided, `prefix` and `suffix` are ignored.             |
-| `onUpdate`             | `(value: number) => void`                                | Called on every animation frame.                                           |
-| `onComplete`           | `(value: number) => void`                                | Called when the animation reaches its target.                              |
-
-### `useAnimatedNumber(target, options?)`
-
-The hook that powers `<AnimatedNumber>`. Returns the current interpolated value.
-
-```ts
-function useAnimatedNumber(
-  target: number,
-  options?: UseAnimatedNumberOptions,
-): number;
-```
-
-`UseAnimatedNumberOptions` includes `duration`, `easing`, `animateOnMount`, `respectReducedMotion`, `onUpdate`, and `onComplete` with the same semantics as the component props.
+| `respectReducedMotion` | `boolean`                                                | Snap to the target without animation when reduced motion is set (defaults to `true`). |
+| `className`            | `string`                                                 | Class name for the wrapper element.                                        |
+| `style`                | `CSSProperties`                                          | Inline styles merged onto the wrapper element.                             |
 
 ### `useInView(options?)`
 
@@ -213,29 +150,17 @@ function useInView<T extends Element = HTMLElement>(
 ): [RefObject<T | null>, boolean];
 
 type UseInViewOptions = {
-  rootMargin?: string;   // "0px"
-  threshold?: number | number[]; // 0.1
-  once?: boolean;        // true
+  rootMargin?: string;            // "0px"
+  threshold?: number | number[];  // 0.1
+  once?: boolean;                 // true
 };
 ```
 
-### `easings`
+## How it works
 
-A record of built-in easing functions you can pass directly or by name.
+Each digit position is a `position: relative; overflow: hidden` cell that is exactly `1em` tall. Inside it, a stack of `<span>0</span><span>1</span>...<span>9</span>` is translated vertically with `transform: translateY(-Nem)` where `N` is the active digit. CSS handles the transition, so retargeting `value` is just a state change in React; there is no `requestAnimationFrame` loop and no JS work per frame.
 
-```ts
-import { easings } from "react-num-animate";
-
-easings.easeInOutCubic(0.5); // 0.5
-easings.spring(0.5);          // ~1.17 (overshoot then settle)
-```
-
-## Behavior
-
-- When `value` changes during an animation, the new animation starts from the currently displayed value, so transitions stay smooth.
-- Non-finite values (`NaN`, `Infinity`) are rendered as-is and skip the animation step.
-- During SSR, the component renders the initial value with no animation.
-- When `prefers-reduced-motion: reduce` is set and `respectReducedMotion` is `true`, transitions snap to the target value.
+Non-digit characters (separators, currency symbols, decimal points) are rendered as plain inline-blocks; only the digits move.
 
 ## License
 

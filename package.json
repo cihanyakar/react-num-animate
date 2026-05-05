@@ -1,16 +1,17 @@
 {
   "name": "react-num-animate",
   "version": "0.1.0",
-  "description": "Lightweight, dependency-free React component and hook for smoothly animating numeric values with easing, formatting, and custom rendering.",
+  "description": "Dependency-free React component for per-digit reel animation. Each digit slides through a 0-9 column when the value changes, with native IntersectionObserver-driven scroll reveal and full Intl.NumberFormat support.",
   "keywords": [
     "react",
-    "animation",
-    "animated",
     "number",
+    "number-flow",
+    "digit",
+    "reel",
+    "odometer",
+    "ticker",
     "counter",
-    "count-up",
-    "tween",
-    "easing",
+    "intl",
     "typescript"
   ],
   "license": "MIT",
