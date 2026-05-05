@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -104,8 +105,9 @@ function FlowDigit(props: FlowDigitProps): ReactElement {
   const containerRef = useRef<HTMLSpanElement>(null);
   const currentRef = useRef<HTMLSpanElement>(null);
   const prevDigitRef = useRef(digit);
+  const currentAnimRef = useRef<Animation | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previous = prevDigitRef.current;
 
     if (previous === digit) {
@@ -129,8 +131,15 @@ function FlowDigit(props: FlowDigitProps): ReactElement {
       return;
     }
 
+    currentAnimRef.current?.cancel();
+
     const ghostExitOffset = direction === "up" ? "-100%" : "100%";
     const incomingStartOffset = direction === "up" ? "100%" : "-100%";
+
+    // Pin the new glyph to its starting position synchronously so the very
+    // first paint shows it off-stage instead of momentarily centered.
+    current.style.transform = `translateY(${incomingStartOffset})`;
+    current.style.opacity = "0";
 
     const ghost = document.createElement("span");
 
@@ -157,13 +166,24 @@ function FlowDigit(props: FlowDigitProps): ReactElement {
       ghost.remove();
     };
 
-    current.animate(
+    const currentAnimation = current.animate(
       [
         { transform: `translateY(${incomingStartOffset})`, opacity: 0 },
         { transform: "translateY(0)", opacity: 1 }
       ],
-      { duration, easing: FLOW_TIMING }
+      { duration, easing: FLOW_TIMING, fill: "forwards" }
     );
+
+    currentAnimRef.current = currentAnimation;
+
+    currentAnimation.onfinish = () => {
+      current.style.transform = "";
+      current.style.opacity = "";
+
+      if (currentAnimRef.current === currentAnimation) {
+        currentAnimRef.current = null;
+      }
+    };
   }, [digit, direction, duration, isAnimated, respectReducedMotion]);
 
   return (
