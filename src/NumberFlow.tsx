@@ -1,9 +1,7 @@
-import {
-  useEffect,
-  useRef,
-  type CSSProperties,
-  type ReactElement,
-  type ReactNode
+import type {
+  CSSProperties,
+  ReactElement,
+  ReactNode
 } from "react";
 import {
   formatWithIntl,
@@ -24,7 +22,7 @@ type MotionPreferences = {
 export type NumberFlowProps = MotionPreferences & {
   /** The numeric value to display. Each digit animates when this prop changes. */
   value: number;
-  /** Per-digit animation duration in milliseconds (defaults to 500). */
+  /** Per-digit transition duration in milliseconds (defaults to 600). */
   duration?: number;
   /**
    * Digits after the decimal point. When omitted, the precision is inferred
@@ -55,7 +53,8 @@ export type NumberFlowProps = MotionPreferences & {
   style?: CSSProperties;
 };
 
-const FLOW_TIMING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+const REEL_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+const REEL_TIMING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -65,88 +64,44 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-type FlowCharProps = MotionPreferences & {
-  char: string;
+type FlowDigitProps = MotionPreferences & {
+  digit: number;
   duration: number;
 };
 
-function FlowChar(props: FlowCharProps): ReactElement {
-  const { char, duration, respectReducedMotion = true } = props;
-  const elementRef = useRef<HTMLSpanElement>(null);
-  const containerRef = useRef<HTMLSpanElement>(null);
-  const prevCharRef = useRef(char);
+const cellStyle: CSSProperties = {
+  display: "block",
+  height: "1em",
+  lineHeight: 1
+};
 
-  useEffect(() => {
-    const previous = prevCharRef.current;
+function FlowDigit(props: FlowDigitProps): ReactElement {
+  const { digit, duration, respectReducedMotion = true } = props;
+  const reduced = respectReducedMotion && prefersReducedMotion();
 
-    if (previous === char) {
-      return;
-    }
-
-    prevCharRef.current = char;
-
-    if (respectReducedMotion && prefersReducedMotion()) {
-      return;
-    }
-
-    const current = elementRef.current;
-    const container = containerRef.current;
-
-    if (!current || !container || typeof current.animate !== "function") {
-      return;
-    }
-
-    const ghost = document.createElement("span");
-
-    ghost.textContent = previous;
-    ghost.setAttribute("aria-hidden", "true");
-    ghost.style.position = "absolute";
-    ghost.style.left = "0";
-    ghost.style.top = "0";
-    ghost.style.right = "0";
-    ghost.style.display = "inline-block";
-    ghost.style.willChange = "transform, opacity";
-    container.appendChild(ghost);
-
-    const ghostAnimation = ghost.animate(
-      [
-        { transform: "translateY(0)", opacity: 1 },
-        { transform: "translateY(-100%)", opacity: 0 }
-      ],
-      { duration, easing: FLOW_TIMING, fill: "forwards" }
-    );
-
-    ghostAnimation.onfinish = () => {
-      ghost.remove();
-    };
-
-    current.animate(
-      [
-        { transform: "translateY(100%)", opacity: 0 },
-        { transform: "translateY(0)", opacity: 1 }
-      ],
-      { duration, easing: FLOW_TIMING }
-    );
-  }, [char, duration, respectReducedMotion]);
-
-  const isDigit = char >= "0" && char <= "9";
-
-  const containerStyle: CSSProperties = {
-    position: "relative",
-    display: "inline-block",
-    overflow: "hidden",
-    verticalAlign: "top",
-    minWidth: isDigit ? "0.6em" : undefined,
-    textAlign: "center"
+  const reelStyle: CSSProperties = {
+    display: "block",
+    transform: `translateY(${-digit}em)`,
+    transition: reduced ? "none" : `transform ${duration}ms ${REEL_TIMING}`,
+    willChange: "transform"
   };
 
   return (
-    <span ref={containerRef} style={containerStyle}>
-      <span
-        ref={elementRef}
-        style={{ display: "inline-block", willChange: "transform, opacity" }}
-      >
-        {char}
+    <span
+      style={{
+        display: "inline-block",
+        height: "1em",
+        lineHeight: 1,
+        overflow: "hidden",
+        verticalAlign: "top"
+      }}
+    >
+      <span style={reelStyle}>
+        {REEL_DIGITS.map((d) => (
+          <span key={d} style={cellStyle}>
+            {d}
+          </span>
+        ))}
       </span>
     </span>
   );
@@ -155,15 +110,15 @@ function FlowChar(props: FlowCharProps): ReactElement {
 const EMPTY_VIEW_OPTIONS: UseInViewOptions = {};
 
 /**
- * Animates each digit of a number independently with a vertical fade
- * transition. Old digits slide up and fade out while new digits slide
- * up from below and fade in. Uses only the Web Animations API and the
- * native `IntersectionObserver`, no third-party motion library.
+ * Renders a number where each digit independently slides between cells of a
+ * 0-9 reel when `value` changes. Pure CSS transforms drive the motion, with
+ * the layout pinned by `font-variant-numeric: tabular-nums` so digits never
+ * shift sideways. No third-party motion library, just React + CSS.
  */
 export function NumberFlow(props: NumberFlowProps): ReactElement {
   const {
     value,
-    duration = 500,
+    duration = 600,
     decimals,
     prefix,
     suffix,
@@ -196,23 +151,42 @@ export function NumberFlow(props: NumberFlowProps): ReactElement {
     ? targetFormatted
     : targetFormatted.replace(/\d/g, "0");
 
+  const wrapperStyle: CSSProperties = {
+    fontVariantNumeric: "tabular-nums",
+    ...style
+  };
+
   return (
     <span
       ref={isViewGated ? viewRef : undefined}
       className={className}
-      style={style}
+      style={wrapperStyle}
     >
       {prefix}
       {/* eslint-disable-next-line @typescript-eslint/no-misused-spread -- formatted output is digits and ASCII separators only, no surrogate pairs */}
-      {[...formatted].map((char, index) => (
-        <FlowChar
-          // eslint-disable-next-line react/no-array-index-key -- digit position is the stable identity
-          key={index}
-          char={char}
-          duration={duration}
-          respectReducedMotion={respectReducedMotion}
-        />
-      ))}
+      {[...formatted].map((char, index) => {
+        if (char >= "0" && char <= "9") {
+          return (
+            <FlowDigit
+              // eslint-disable-next-line react/no-array-index-key -- digit position is the stable identity
+              key={index}
+              digit={Number(char)}
+              duration={duration}
+              respectReducedMotion={respectReducedMotion}
+            />
+          );
+        }
+
+        return (
+          <span
+            // eslint-disable-next-line react/no-array-index-key -- separator position is the stable identity
+            key={index}
+            style={{ display: "inline-block" }}
+          >
+            {char}
+          </span>
+        );
+      })}
       {suffix}
     </span>
   );
